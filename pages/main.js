@@ -4,52 +4,41 @@ import React from "react";
 var audioContext = null; // Reference to the audio context.
 var audioNode = null; // This example uses one audio node only.
 var Superpowered = null; // Reference to the Superpowered module.
-var pitchShift = 0; // The current pitch shift value.
 
-// onclick by the pitch shift minus and plus buttons
-function changePitchShift(e) {
-  // limiting the new pitch shift value
-  let value = parseInt(e.target.value);
-  pitchShift += value;
-  if (pitchShift < -12) pitchShift = -12;
-  else if (pitchShift > 12) pitchShift = 12;
-  // displaying the value
-  document.getElementById("pitchShiftDisplay").innerText =
-    " pitch shift: " + (pitchShift < 1 ? pitchShift : "+" + pitchShift) + " ";
-  // sending the new value to the audio node
-  audioNode.sendMessageToAudioScope({ pitchShift: pitchShift });
-}
+class PitchButtons extends React.Component {
+  state = { pitchShift: 0 };
 
-// on change by the rate slider
-function changeRate() {
-  // displaying the new rate
-  let value = document.getElementById("rateSlider").value,
-    text;
-  if (value == 10000) text = "original tempo";
-  else if (value < 10000) text = "-" + (100 - value / 100).toPrecision(2) + "%";
-  else text = "+" + (value / 100 - 100).toPrecision(2) + "%";
-  document.getElementById("rateDisplay").innerText = text;
-  // sending the new rate to the audio node
-  audioNode.sendMessageToAudioScope({ rate: value });
-}
+  // onclick by the pitch shift minus and plus buttons
+  changePitchShift = (increment) => {
+    let { pitchShift } = this.state;
+    pitchShift += increment;
+    pitchShift = Math.max(pitchShift, -12);
+    pitchShift = Math.min(pitchShift, 12);
+    this.setState({ pitchShift });
+    // sending the new value to the audio node
+    audioNode.sendMessageToAudioScope({ pitchShift });
+  };
 
-// double click on the rate slider
-function changeRateDbl() {
-  document.getElementById("rateSlider").value = 10000;
-  changeRate();
-}
-
-// click on play/pause
-function togglePlayback(e) {
-  let button = document.getElementById("playPause");
-  if (button.value == 1) {
-    button.value = 0;
-    button.innerText = "PLAY";
-    audioContext.suspend();
-  } else {
-    button.value = 1;
-    button.innerText = "PAUSE";
-    audioContext.resume();
+  render() {
+    const renderText = () => {
+      const { pitchShift } = this.state;
+      const text =
+        " pitch shift: " +
+        (pitchShift < 1 ? pitchShift : "+" + pitchShift) +
+        " ";
+      return text;
+    };
+    return (
+      <>
+        <button id="pitchMinus" onClick={() => this.changePitchShift(-1)}>
+          -
+        </button>
+        <span id="pitchShiftDisplay"> {renderText()}</span>
+        <button id="pitchPlus" onClick={() => this.changePitchShift(+1)}>
+          +
+        </button>
+      </>
+    );
   }
 }
 
@@ -92,6 +81,77 @@ async function start(incState) {
 
     incState();
   });
+}
+
+class PlayButton extends React.Component {
+  state = { value: 0 };
+
+  togglePlayback = () => {
+    const { value } = this.state;
+    if (value === 1) {
+      this.setState({ value: 0 });
+      audioContext.suspend();
+    } else {
+      this.setState({ value: 1 });
+      audioContext.resume();
+    }
+  };
+
+  render() {
+    const buttonText = this.state.value === 0 ? "PLAY" : "PAUSE";
+    return (
+      <button id="playPause" value="0" onClick={this.togglePlayback}>
+        {buttonText}
+      </button>
+    );
+  }
+}
+
+class RateSlider extends React.Component {
+  initState = { value: 10000 };
+  state = this.initState;
+
+  changeRate = (evt) => {
+    const value = evt.target.valueAsNumber;
+    this.setState({ value });
+    // sending the new rate to the audio node
+    audioNode.sendMessageToAudioScope({ rate: value });
+  };
+
+  changeRateDbl = () => {
+    this.setState(this.initState);
+  };
+
+  render() {
+    const renderText = () => {
+      const { value } = this.state;
+      let text;
+      if (value === 10000) {
+        text = "original tempo";
+      } else if (value < 10000) {
+        text = "-" + (100 - value / 100).toPrecision(2) + "%";
+      } else {
+        text = "+" + (value / 100 - 100).toPrecision(2) + "%";
+      }
+      return text;
+    };
+    return (
+      <>
+        <p id="rateDisplay">{renderText()}</p>
+        <input
+          id="rateSlider"
+          type="range"
+          min="5000"
+          max="20000"
+          defaultValue={this.state.value}
+          readOnly={true}
+          onInput={this.changeRate}
+          onDoubleClick={this.changeRateDbl}
+          style={{ width: "100%" }}
+        />
+      </>
+    );
+  }
 }
 
 class Init extends React.Component {
@@ -139,28 +199,9 @@ class Init extends React.Component {
       // UI: innerHTML may be ugly but keeps this example small
       return (
         <>
-          <button id="playPause" value="0" onClick={togglePlayback}>
-            PLAY
-          </button>
-          <p id="rateDisplay">original tempo</p>
-          <input
-            id="rateSlider"
-            type="range"
-            min="5000"
-            max="20000"
-            defaultValue="10000"
-            readOnly={true}
-            onInput={changeRate}
-            onDoubleClick={changeRateDbl}
-            style={{ width: "100%" }}
-          />
-          <button id="pitchMinus" value="-1" onClick={changePitchShift}>
-            -
-          </button>
-          <span id="pitchShiftDisplay"> pitch shift: 0 </span>
-          <button id="pitchPlus" value="1" onClick={changePitchShift}>
-            +
-          </button>
+          <PlayButton />
+          <RateSlider />
+          <PitchButtons />
         </>
       );
     }
