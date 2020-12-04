@@ -4,7 +4,6 @@ import React from "react";
 var audioContext = null; // Reference to the audio context.
 var audioNode = null; // This example uses one audio node only.
 var Superpowered = null; // Reference to the Superpowered module.
-var content = null; // The <div> displaying everything.
 var pitchShift = 0; // The current pitch shift value.
 
 // onclick by the pitch shift minus and plus buttons
@@ -59,25 +58,12 @@ function onMessageFromAudioScope(message) {
 }
 
 // when the START button is clicked
-async function start() {
-  // content.innerText = "Creating the audio context and node...";
-  console.log("Creating the audio context and node...");
+async function start(incState) {
   audioContext = Superpowered.getAudioContext(44100);
   let currentPath = window.location.pathname.substring(
     0,
     window.location.pathname.lastIndexOf("/")
   );
-
-  // console.log(
-  //   "chrome.runtime.getURL",
-  //   chrome.runtime.getURL("pages/processors.js")
-  // );
-
-  // const audioCtx = new AudioContext();
-  // const audioWorklet = audioCtx.audioWorklet;
-  // await audioWorklet.addModule("/processor.js", {
-  //   credentials: "omit",
-  // });
 
   audioNode = await Superpowered.createAudioNodeAsync(
     audioContext,
@@ -85,19 +71,12 @@ async function start() {
     "MyProcessor",
     onMessageFromAudioScope
   );
-  // audioNode = Superpowered.createAudioNode(
-  //   audioContext,
-  //   "/processor.js",
-  //   "MyProcessor",
-  //   onMessageFromAudioScope
-  // );
 
-  // content.innerText = "Downloading music...";
-  console.log("Downloading music...");
+  // console.log("Downloading music...");
+  incState();
   let response = await fetch("track.wav");
 
-  // content.innerText = "Decoding audio...";
-  console.log("Decoding audio...");
+  incState();
   let rawData = await response.arrayBuffer();
   audioContext.decodeAudioData(rawData, function (pcmData) {
     // Safari doesn't support await for decodeAudioData yet
@@ -111,48 +90,23 @@ async function start() {
     audioContext.suspend();
     audioNode.connect(audioContext.destination);
 
-    // UI: innerHTML may be ugly but keeps this example small
-    // content.innerHTML =
-    //   '\
-    //         <button id="playPause" value="0">PLAY</button>\
-    //         <p id="rateDisplay">original tempo</p>\
-    //         <input id="rateSlider" type="range" min="5000" max="20000" value="10000" style="width: 100%">\
-    //         <button id="pitchMinus" value="-1">-</button>\
-    //         <span id="pitchShiftDisplay"> pitch shift: 0 </span>\
-    //         <button id="pitchPlus" value="1">+</button>\
-    //     ';
-    console.log("Play");
-    // document.getElementById("rateSlider").addEventListener("input", changeRate);
-    // document
-    //   .getElementById("rateSlider")
-    //   .addEventListener("dblclick", changeRateDbl);
-    // document
-    //   .getElementById("pitchMinus")
-    //   .addEventListener("click", changePitchShift);
-    // document
-    //   .getElementById("pitchPlus")
-    //   .addEventListener("click", changePitchShift);
-    // document
-    //   .getElementById("playPause")
-    //   .addEventListener("click", togglePlayback);
+    incState();
   });
 }
 
-// function init() {
-//   SuperpoweredModule({
-//     licenseKey: "ExampleLicenseKey-WillExpire-OnNextUpdate",
-//     enableAudioTimeStretching: true,
-
-//     onReady: function (SuperpoweredInstance) {
-//       Superpowered = SuperpoweredInstance;
-//       content = document.getElementById("content");
-//       content.innerHTML = '<button id="startButton">START</button>';
-//       document.getElementById("startButton").addEventListener("click", start);
-//     },
-//   });
-// }
-
 class Init extends React.Component {
+  INIT = 0;
+  DOWNLOADING = 1;
+  DECODING = 2;
+  READY = 3;
+
+  state = { step: this.INIT };
+
+  incState = () => {
+    const { step } = this.state;
+    this.setState({ step: step + 1 });
+  };
+
   componentDidMount() {
     SuperpoweredModule({
       licenseKey: "ExampleLicenseKey-WillExpire-OnNextUpdate",
@@ -165,13 +119,51 @@ class Init extends React.Component {
   }
 
   render() {
-    return (
-      <>
-        <button id="startButton" onClick={start}>
+    const { step } = this.state;
+    if (step === this.INIT) {
+      return (
+        <button
+          id="startButton"
+          onClick={() => {
+            start(this.incState);
+          }}
+        >
           START
         </button>
-      </>
-    );
+      );
+    } else if (step === this.DOWNLOADING) {
+      return <div>Downloading music...</div>;
+    } else if (step === this.DECODING) {
+      return <div>Decoding audio...</div>;
+    } else if (step === this.READY) {
+      // UI: innerHTML may be ugly but keeps this example small
+      return (
+        <>
+          <button id="playPause" value="0" onClick={togglePlayback}>
+            PLAY
+          </button>
+          <p id="rateDisplay">original tempo</p>
+          <input
+            id="rateSlider"
+            type="range"
+            min="5000"
+            max="20000"
+            defaultValue="10000"
+            readOnly={true}
+            onInput={changeRate}
+            onDoubleClick={changeRateDbl}
+            style={{ width: "100%" }}
+          />
+          <button id="pitchMinus" value="-1" onClick={changePitchShift}>
+            -
+          </button>
+          <span id="pitchShiftDisplay"> pitch shift: 0 </span>
+          <button id="pitchPlus" value="1" onClick={changePitchShift}>
+            +
+          </button>
+        </>
+      );
+    }
   }
 }
 
