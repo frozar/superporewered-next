@@ -1,10 +1,6 @@
 import SuperpoweredModule from "../public/superpowered";
 import React from "react";
 
-var audioContext = null; // Reference to the audio context.
-var audioNode = null; // This example uses one audio node only.
-var Superpowered = null; // Reference to the Superpowered module.
-
 class PitchButtons extends React.Component {
   state = { pitchShift: 0 };
 
@@ -16,7 +12,7 @@ class PitchButtons extends React.Component {
     pitchShift = Math.min(pitchShift, 12);
     this.setState({ pitchShift });
     // sending the new value to the audio node
-    audioNode.sendMessageToAudioScope({ pitchShift });
+    this.props.audioNode.sendMessageToAudioScope({ pitchShift });
   };
 
   render() {
@@ -42,47 +38,6 @@ class PitchButtons extends React.Component {
   }
 }
 
-function onMessageFromAudioScope(message) {
-  console.log("Message received from the audio node: " + message);
-}
-
-// when the START button is clicked
-async function start(incState) {
-  audioContext = Superpowered.getAudioContext(44100);
-  let currentPath = window.location.pathname.substring(
-    0,
-    window.location.pathname.lastIndexOf("/")
-  );
-
-  audioNode = await Superpowered.createAudioNodeAsync(
-    audioContext,
-    currentPath + "/processor.js",
-    "MyProcessor",
-    onMessageFromAudioScope
-  );
-
-  // console.log("Downloading music...");
-  incState();
-  let response = await fetch("track.wav");
-
-  incState();
-  let rawData = await response.arrayBuffer();
-  audioContext.decodeAudioData(rawData, function (pcmData) {
-    // Safari doesn't support await for decodeAudioData yet
-    // send the PCM audio to the audio node
-    audioNode.sendMessageToAudioScope({
-      left: pcmData.getChannelData(0),
-      right: pcmData.getChannelData(1),
-    });
-
-    // audioNode -> audioContext.destination (audio output)
-    audioContext.suspend();
-    audioNode.connect(audioContext.destination);
-
-    incState();
-  });
-}
-
 class PlayButton extends React.Component {
   state = { value: 0 };
 
@@ -90,17 +45,17 @@ class PlayButton extends React.Component {
     const { value } = this.state;
     if (value === 1) {
       this.setState({ value: 0 });
-      audioContext.suspend();
+      this.props.audioContext.suspend();
     } else {
       this.setState({ value: 1 });
-      audioContext.resume();
+      this.props.audioContext.resume();
     }
   };
 
   render() {
     const buttonText = this.state.value === 0 ? "PLAY" : "PAUSE";
     return (
-      <button id="playPause" value="0" onClick={this.togglePlayback}>
+      <button id="playPause" onClick={this.togglePlayback}>
         {buttonText}
       </button>
     );
@@ -108,18 +63,24 @@ class PlayButton extends React.Component {
 }
 
 class RateSlider extends React.Component {
-  initState = { value: 10000 };
-  state = this.initState;
+  initValue = 10000;
+  state = { value: this.initValue };
+
+  // sending the new rate to the audio node
+  updateAudioRate = (rate) => {
+    this.props.audioNode.sendMessageToAudioScope({ rate });
+  };
 
   changeRate = (evt) => {
     const value = evt.target.valueAsNumber;
     this.setState({ value });
-    // sending the new rate to the audio node
-    audioNode.sendMessageToAudioScope({ rate: value });
+    this.updateAudioRate(value);
   };
 
   changeRateDbl = () => {
-    this.setState(this.initState);
+    const value = this.initValue;
+    this.setState({ value });
+    this.updateAudioRate(value);
   };
 
   render() {
@@ -143,8 +104,7 @@ class RateSlider extends React.Component {
           type="range"
           min="5000"
           max="20000"
-          defaultValue={this.state.value}
-          readOnly={true}
+          value={this.state.value}
           onInput={this.changeRate}
           onDoubleClick={this.changeRateDbl}
           style={{ width: "100%" }}
@@ -154,40 +114,78 @@ class RateSlider extends React.Component {
   }
 }
 
-class Init extends React.Component {
+class Stretcher extends React.Component {
   INIT = 0;
   DOWNLOADING = 1;
   DECODING = 2;
   READY = 3;
+  Superpowered = null;
+  audioNode = null;
+  audioContext = null;
 
   state = { step: this.INIT };
-
-  incState = () => {
-    const { step } = this.state;
-    this.setState({ step: step + 1 });
-  };
 
   componentDidMount() {
     SuperpoweredModule({
       licenseKey: "ExampleLicenseKey-WillExpire-OnNextUpdate",
       enableAudioTimeStretching: true,
 
-      onReady: function (SuperpoweredInstance) {
-        Superpowered = SuperpoweredInstance;
+      onReady: (SuperpoweredInstance) => {
+        this.Superpowered = SuperpoweredInstance;
       },
     });
   }
+
+  incState = () => {
+    const { step } = this.state;
+    this.setState({ step: step + 1 });
+  };
+
+  // when the START button is clicked
+  start = async () => {
+    const onMessageFromAudioScope = (message) => {
+      console.log("Message received from the audio node: " + message);
+    };
+
+    this.audioContext = this.Superpowered.getAudioContext(44100);
+    let currentPath = window.location.pathname.substring(
+      0,
+      window.location.pathname.lastIndexOf("/")
+    );
+
+    this.audioNode = await this.Superpowered.createAudioNodeAsync(
+      this.audioContext,
+      currentPath + "/processor.js",
+      "MyProcessor",
+      onMessageFromAudioScope
+    );
+
+    this.incState();
+    let response = await fetch("track.wav");
+
+    this.incState();
+    let rawData = await response.arrayBuffer();
+    this.audioContext.decodeAudioData(rawData, (pcmData) => {
+      // Safari doesn't support await for decodeAudioData yet
+      // send the PCM audio to the audio node
+      this.audioNode.sendMessageToAudioScope({
+        left: pcmData.getChannelData(0),
+        right: pcmData.getChannelData(1),
+      });
+
+      // audioNode -> audioContext.destination (audio output)
+      this.audioContext.suspend();
+      this.audioNode.connect(this.audioContext.destination);
+
+      this.incState();
+    });
+  };
 
   render() {
     const { step } = this.state;
     if (step === this.INIT) {
       return (
-        <button
-          id="startButton"
-          onClick={() => {
-            start(this.incState);
-          }}
-        >
+        <button id="startButton" onClick={this.start}>
           START
         </button>
       );
@@ -199,13 +197,13 @@ class Init extends React.Component {
       // UI: innerHTML may be ugly but keeps this example small
       return (
         <>
-          <PlayButton />
-          <RateSlider />
-          <PitchButtons />
+          <PlayButton audioContext={this.audioContext} />
+          <RateSlider audioNode={this.audioNode} />
+          <PitchButtons audioNode={this.audioNode} />
         </>
       );
     }
   }
 }
 
-export default Init;
+export default Stretcher;
