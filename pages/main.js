@@ -114,6 +114,20 @@ class RateSlider extends React.Component {
   }
 }
 
+function Credit() {
+  return (
+    <div>
+      Thank you{" "}
+      <a
+        href="https://soundcloud.com/freemusicforvlogs/joakim-karud-classic-free-music-for-vlogs"
+        target="_blank"
+      >
+        Joakim Karud - Classic
+      </a>
+    </div>
+  );
+}
+
 class Stretcher extends React.Component {
   INIT = 0;
   DOWNLOADING = 1;
@@ -161,7 +175,7 @@ class Stretcher extends React.Component {
     );
 
     this.incState();
-    let response = await fetch("track.wav");
+    let response = await fetch("track.mp3");
 
     this.incState();
     let rawData = await response.arrayBuffer();
@@ -200,6 +214,7 @@ class Stretcher extends React.Component {
           <PlayButton audioContext={this.audioContext} />
           <RateSlider audioNode={this.audioNode} />
           <PitchButtons audioNode={this.audioNode} />
+          <Credit />
         </>
       );
     }
