@@ -19,3 +19,7 @@ body {
   height: 40em;
   border: 4px dashed #4aa1f3;
 }
+
+#rateSlider {
+  margin: 2px auto;
+}
