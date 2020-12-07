@@ -6,11 +6,20 @@ body {
     Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
 }
 
-/* a {
-  color: inherit;
-  text-decoration: none;
-} */
-
 * {
   box-sizing: border-box;
+}
+
+#drop_zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  width: 80%;
+  height: 40em;
+  border: 4px dashed #4aa1f3;
+}
+
+#rateSlider {
+  margin: 2px auto;
 }
