@@ -114,18 +114,86 @@ class RateSlider extends React.Component {
   }
 }
 
-function Credit() {
-  return (
-    <div>
-      Thank you{" "}
-      <a
-        href="https://soundcloud.com/freemusicforvlogs/joakim-karud-classic-free-music-for-vlogs"
-        target="_blank"
+function Credit(props) {
+  if (props.fileName === "") {
+    return (
+      <div>
+        Thank you{" "}
+        <a
+          href="https://soundcloud.com/freemusicforvlogs/joakim-karud-classic-free-music-for-vlogs"
+          target="_blank"
+        >
+          Joakim Karud - Classic
+        </a>
+      </div>
+    );
+  } else {
+    return <div>File "{props.fileName}" loaded</div>;
+  }
+}
+
+class DropZone extends React.Component {
+  validateFile = (file) => {
+    const validTypes = ["audio/mpeg"];
+    if (validTypes.indexOf(file.type) === -1) {
+      return false;
+    }
+    return true;
+  };
+
+  dropHandler = async (ev) => {
+    ev.preventDefault();
+
+    if (ev.dataTransfer.items.length !== 1) {
+      console.error("Drop only 1 file at a time");
+      return;
+    }
+
+    const dataTransferItem = ev.dataTransfer.items[0];
+    if (dataTransferItem.kind !== "file") {
+      console.error("Accepte only file on the drop zone");
+      return;
+    }
+
+    if (!this.validateFile(dataTransferItem)) {
+      console.error("Doesn't handle file of type:", dataTransferItem.type);
+      return;
+    }
+
+    const file = dataTransferItem.getAsFile();
+
+    this.props.cleanAudioContext();
+    await this.props.initAudioNode();
+    this.props.setFileName(file.name);
+    this.props.processInputSound(file);
+  };
+
+  // These handlers prevent the browser to open the dropped file
+  dragOver = (e) => {
+    e.preventDefault();
+  };
+
+  dragEnter = (e) => {
+    e.preventDefault();
+  };
+
+  dragLeave = (e) => {
+    e.preventDefault();
+  };
+
+  render() {
+    return (
+      <div
+        id="drop_zone"
+        onDragOver={this.dragOver}
+        onDragEnter={this.dragEnter}
+        onDragLeave={this.dragLeave}
+        onDrop={this.dropHandler}
       >
-        Joakim Karud - Classic
-      </a>
-    </div>
-  );
+        <p>Drag one or more files to this Drop Zone ...</p>
+      </div>
+    );
+  }
 }
 
 class Stretcher extends React.Component {
@@ -137,48 +205,25 @@ class Stretcher extends React.Component {
   audioNode = null;
   audioContext = null;
 
-  state = { step: this.INIT };
+  state = { step: this.INIT, fileName: "" };
 
-  componentDidMount() {
-    SuperpoweredModule({
-      licenseKey: "ExampleLicenseKey-WillExpire-OnNextUpdate",
-      enableAudioTimeStretching: true,
-
-      onReady: (SuperpoweredInstance) => {
-        this.Superpowered = SuperpoweredInstance;
-      },
-    });
-  }
-
-  incState = () => {
-    const { step } = this.state;
-    this.setState({ step: step + 1 });
-  };
-
-  // when the START button is clicked
-  start = async () => {
+  initAudioNode = async () => {
     const onMessageFromAudioScope = (message) => {
       console.log("Message received from the audio node: " + message);
     };
 
     this.audioContext = this.Superpowered.getAudioContext(44100);
-    let currentPath = window.location.pathname.substring(
-      0,
-      window.location.pathname.lastIndexOf("/")
-    );
-
     this.audioNode = await this.Superpowered.createAudioNodeAsync(
       this.audioContext,
-      currentPath + "/processor.js",
+      "/processor.js",
       "MyProcessor",
       onMessageFromAudioScope
     );
+  };
 
-    this.incState();
-    let response = await fetch("track.mp3");
-
-    this.incState();
-    let rawData = await response.arrayBuffer();
+  processInputSound = async (input) => {
+    this.setState({ step: this.DECODING });
+    let rawData = await input.arrayBuffer();
     this.audioContext.decodeAudioData(rawData, (pcmData) => {
       // Safari doesn't support await for decodeAudioData yet
       // send the PCM audio to the audio node
@@ -191,30 +236,67 @@ class Stretcher extends React.Component {
       this.audioContext.suspend();
       this.audioNode.connect(this.audioContext.destination);
 
-      this.incState();
+      this.setState({ step: this.READY });
     });
   };
 
+  cleanAudioContext = () => {
+    this.audioContext.suspend();
+    this.audioContext = null;
+    this.setState({ step: this.INIT, fileName: "" });
+  };
+
+  setFileName = (fileName) => {
+    this.setState({ fileName });
+  };
+
+  fetchDefaultSong = async () => {
+    this.setState({ step: this.DOWNLOADING });
+    let response = await fetch("track.mp3");
+
+    this.processInputSound(response);
+  };
+
+  componentDidMount() {
+    SuperpoweredModule({
+      licenseKey: "ExampleLicenseKey-WillExpire-OnNextUpdate",
+      enableAudioTimeStretching: true,
+
+      onReady: (SuperpoweredInstance) => {
+        this.Superpowered = SuperpoweredInstance;
+
+        this.initAudioNode();
+        this.fetchDefaultSong();
+      },
+    });
+  }
+
+  componentWillUnmount() {
+    this.cleanAudioContext();
+  }
+
   render() {
+    // console.log("this.state", this.state);
     const { step } = this.state;
     if (step === this.INIT) {
-      return (
-        <button id="startButton" onClick={this.start}>
-          START
-        </button>
-      );
+      return <div>Init state</div>;
     } else if (step === this.DOWNLOADING) {
       return <div>Downloading music...</div>;
     } else if (step === this.DECODING) {
       return <div>Decoding audio...</div>;
-    } else if (step === this.READY) {
-      // UI: innerHTML may be ugly but keeps this example small
+    } else if (step >= this.READY) {
       return (
         <>
           <PlayButton audioContext={this.audioContext} />
           <RateSlider audioNode={this.audioNode} />
           <PitchButtons audioNode={this.audioNode} />
-          <Credit />
+          <Credit fileName={this.state.fileName} />
+          <DropZone
+            cleanAudioContext={this.cleanAudioContext}
+            initAudioNode={this.initAudioNode}
+            setFileName={this.setFileName}
+            processInputSound={this.processInputSound}
+          />
         </>
       );
     }
