@@ -190,7 +190,8 @@ class DropZone extends React.Component {
         onDragLeave={this.dragLeave}
         onDrop={this.dropHandler}
       >
-        <p>You can drop a sound file here to try it :)</p>
+        <p>Want to try another sound than the default one</p>
+        <p>Let's drop a sound file here</p>
       </div>
     );
   }
